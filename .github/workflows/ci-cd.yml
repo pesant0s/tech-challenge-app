@@ -1,0 +1,202 @@
+name: CI/CD
+
+# Testes, manifestos e boot da imagem sempre; publicação e deploy só com AMBIENTE_ATIVO=true
+# (ADR-013, no tech-challenge-infra-k8s). A main só recebe código por Pull Request.
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: oficina-api
+  EKS_CLUSTER: tech-challenge-eks
+  NAMESPACE: oficina
+  DEPLOYMENT: oficina-api
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Testes e cobertura
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "sqlite:///:memory:"
+      SECRET_KEY: "chave-de-ci-com-mais-de-32-caracteres-para-teste"
+      WEBHOOK_SECRET: "webhook-secret-local"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest --cov=app --cov-report=term-missing -q
+
+  manifestos:
+    name: Validar manifestos Kubernetes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Renderizar e validar contra o schema
+        run: |
+          kubectl kustomize k8s/overlays/producao > /tmp/manifestos.yaml
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar -xz -C /tmp
+          /tmp/kubeconform -strict -summary /tmp/manifestos.yaml
+
+  imagem:
+    name: Build e prova da imagem
+    needs: [testes, manifestos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PUBLICAR: ${{ github.ref_name == 'main' && github.event_name != 'pull_request' && vars.AMBIENTE_ATIVO == 'true' }}
+    outputs:
+      imagem: ${{ steps.publicar.outputs.imagem }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oficina
+          # Com caracteres especiais, como a senha gerada em produção.
+          POSTGRES_PASSWORD: "oficina!#%"
+          POSTGRES_DB: oficina
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oficina"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: docker build -t oficina-api:ci .
+
+      # Mesmo caminho de um deploy novo: o entrypoint migra um banco vazio e sobe o servidor.
+      - name: Provar que a imagem sobe contra PostgreSQL
+        run: |
+          docker run -d --name api --network host \
+            -e DATABASE_URL=postgresql://oficina:oficina%21%23%25@localhost:5432/oficina \
+            -e SECRET_KEY=chave-de-ci-com-mais-de-32-caracteres-para-teste \
+            -e WEBHOOK_SECRET=ci -e LOG_FORMAT=json \
+            oficina-api:ci
+          for _ in $(seq 1 60); do
+            curl -fsS http://localhost:8000/health/ready && exit 0
+            [ "$(docker inspect -f '{{.State.Running}}' api)" = "true" ] || break
+            sleep 1
+          done
+          docker logs api
+          exit 1
+
+      - name: Autenticar na AWS via OIDC
+        id: aws
+        if: env.PUBLICAR == 'true'
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Explicar falha de autenticação
+        if: env.PUBLICAR == 'true' && steps.aws.outcome == 'failure'
+        run: |
+          echo "::error::AMBIENTE_ATIVO=true, mas a role não pôde ser assumida: o ambiente foi destruído sem 'make down' ou falta o secret AWS_ROLE_ARN."
+          exit 1
+
+      - name: Login no ECR
+        id: ecr
+        if: env.PUBLICAR == 'true'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Publicar no ECR
+        id: publicar
+        if: env.PUBLICAR == 'true'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGEM="$REGISTRY/$ECR_REPOSITORY"
+          docker tag oficina-api:ci "$IMAGEM:${GITHUB_SHA::7}"
+          docker tag oficina-api:ci "$IMAGEM:latest"
+          docker push "$IMAGEM:${GITHUB_SHA::7}"
+          docker push "$IMAGEM:latest"
+          echo "imagem=$IMAGEM:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  ambiente-desligado:
+    name: Publicação e deploy não executados
+    needs: imagem
+    if: github.ref_name == 'main' && github.event_name != 'pull_request' && vars.AMBIENTE_ATIVO != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "### Publicação e deploy pulados — AMBIENTE_ATIVO não está true, o ambiente AWS está desligado." >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy no EKS
+    needs: imagem
+    if: github.ref_name == 'main' && github.event_name != 'pull_request' && vars.AMBIENTE_ATIVO == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment: producao
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Autenticar na AWS via OIDC
+        id: aws
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Explicar falha de autenticação
+        if: steps.aws.outcome == 'failure'
+        run: |
+          echo "::error::AMBIENTE_ATIVO=true, mas a role não pôde ser assumida: o ambiente foi destruído sem 'make down' ou falta o secret AWS_ROLE_ARN."
+          exit 1
+
+      - run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+
+      - run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      # O Secret nunca é versionado: é montado a cada deploy a partir do Secrets Manager.
+      - name: Sincronizar Secret
+        run: |
+          SEGREDO=$(aws secretsmanager get-secret-value --secret-id tech-challenge/app --query SecretString --output text)
+          campo() { echo "$SEGREDO" | python3 -c "import json,sys;print(json.load(sys.stdin)['$1'])"; }
+          kubectl create secret generic oficina-secret --namespace "$NAMESPACE" \
+            --from-literal=DATABASE_URL="$(campo DATABASE_URL)" \
+            --from-literal=SECRET_KEY="$(campo SECRET_KEY)" \
+            --from-literal=WEBHOOK_SECRET="$(campo WEBHOOK_SECRET)" \
+            --from-literal=ADMIN_PASSWORD="$(campo ADMIN_PASSWORD)" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Aplicar manifestos
+        env:
+          IMAGEM: ${{ needs.imagem.outputs.imagem }}
+        run: |
+          (cd k8s/overlays/producao && kustomize edit set image "oficina-api=$IMAGEM")
+          kubectl apply -k k8s/overlays/producao
+          kubectl rollout status "deployment/$DEPLOYMENT" -n "$NAMESPACE" --timeout=300s
+
+      - name: Smoke test
+        run: |
+          kubectl run "smoke-test-${GITHUB_RUN_ID}" --namespace "$NAMESPACE" --rm -i --restart=Never \
+            --image=curlimages/curl:8.10.1 -- curl -fsS "http://${DEPLOYMENT}/health"
+
+      - name: Diagnóstico em caso de falha
+        if: failure()
+        run: |
+          kubectl get all -n "$NAMESPACE"
+          kubectl logs -n "$NAMESPACE" -l app.kubernetes.io/name=oficina-api --tail=100 || true
