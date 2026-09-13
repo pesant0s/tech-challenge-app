@@ -1,0 +1,32 @@
+# Controle de versão
+.git
+.github
+.gitignore
+
+# Segredos e ambientes locais
+.env
+.env.*
+!.env.example
+.venv*
+venv
+
+# Artefatos de build e teste
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+coverage.xml
+htmlcov
+tests
+
+# Infra e documentação — não fazem parte da imagem
+k8s
+docs
+Makefile
+README.md
+docker-compose*.yml
+
+# SO e editores
+.DS_Store
+.idea
+.vscode
