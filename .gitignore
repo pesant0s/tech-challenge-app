@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+venv/
+
+# Testes e cobertura
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.db
+
+# Segredos — nunca versionar
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Kubernetes e AWS
+kubeconfig
+*.kubeconfig
+
+# New Relic
+newrelic-agent.log
+
+# Editores e SO
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
