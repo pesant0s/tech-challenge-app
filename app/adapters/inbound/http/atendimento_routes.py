@@ -47,8 +47,8 @@ def listar_os(
 
 
 @router.get("/os/metricas/tempo-medio",
-    summary="Tempo médio de execução",
-    description="Retorna o tempo médio (em minutos) entre início e finalização. **Requer ADMIN.**")
+    summary="Tempo médio de execução e por status",
+    description="Tempo médio (em minutos) entre início e finalização e, pelo histórico, em cada status. **Requer ADMIN.**")
 def tempo_medio(db: Session = Depends(get_db), _=Depends(require_admin)):
     return OSRepositoryAdapter(db).tempo_medio_execucao()
 

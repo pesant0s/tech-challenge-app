@@ -1,3 +1,4 @@
+from app.application.eventos_os import registrar_mudanca_de_status
 from app.domain.entities.os import OrdemDeServico
 from app.domain.exceptions import BusinessRuleException
 from app.domain.ports.os_repository import OSRepositoryPort
@@ -25,4 +26,5 @@ class AprovarOSUseCase:
         os.aprovar()
         self._os_repo.commit()
         self._os_repo.refresh(os)
+        registrar_mudanca_de_status(os)
         return os

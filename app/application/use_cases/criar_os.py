@@ -1,3 +1,4 @@
+from app.application.eventos_os import registrar_mudanca_de_status
 from app.domain.entities.os import OrdemDeServico, ItemOS, StatusOS
 from app.domain.exceptions import NotFoundException, BusinessRuleException
 from app.domain.ports.email_port import EmailNotificacaoPort
@@ -36,6 +37,7 @@ class CriarOSUseCase:
         self._os_repo.adicionar(os)
         self._os_repo.commit()
         self._os_repo.refresh(os)
+        registrar_mudanca_de_status(os)
 
         if self._notificador:
             cliente = self._cliente_repo.buscar_por_id(cliente_id) if self._cliente_repo else None
