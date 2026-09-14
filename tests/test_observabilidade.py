@@ -37,6 +37,13 @@ def test_log_json_carrega_campos_extras():
     assert evento["duracao_ms"] == 12.5
 
 
+def test_log_json_liga_a_linha_ao_trace_do_new_relic(monkeypatch):
+    vinculo = {"trace.id": "t-1", "span.id": "s-1", "entity.guid": "g-1"}
+    monkeypatch.setattr("newrelic.agent.get_linking_metadata", lambda: vinculo)
+    evento = json.loads(JsonFormatter().format(_registro()))
+    assert {k: evento[k] for k in vinculo} == vinculo
+
+
 def test_log_json_omite_correlation_id_fora_de_requisicao():
     definir_correlation_id("")
     evento = json.loads(JsonFormatter().format(_registro()))

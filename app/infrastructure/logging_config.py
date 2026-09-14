@@ -4,6 +4,8 @@ import logging
 from contextvars import ContextVar
 from datetime import datetime, timezone
 
+import newrelic.agent
+
 _correlation_id: ContextVar[str] = ContextVar("correlation_id", default="")
 
 # Atributos nativos do LogRecord; o restante são campos passados em `extra`.
@@ -33,6 +35,9 @@ class JsonFormatter(logging.Formatter):
         }
         if correlation_id := _correlation_id.get():
             evento["correlation_id"] = correlation_id
+        # Com o agente ativo, trace.id e span.id ligam a linha de log ao trace no New Relic.
+        if "trace.id" in (vinculo := newrelic.agent.get_linking_metadata()):
+            evento.update(vinculo)
         if record.exc_info:
             evento["exception"] = self.formatException(record.exc_info)
         evento.update({k: v for k, v in record.__dict__.items() if k not in _ATRIBUTOS_PADRAO and not k.startswith("_")})

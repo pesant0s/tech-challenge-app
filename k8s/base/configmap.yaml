@@ -10,3 +10,5 @@ data:
   LOG_FORMAT: "json"
   LOG_LEVEL: "INFO"
   NEW_RELIC_APP_NAME: "tech-challenge-oficina"
+  # O stdout já chega pelo nri-bundle; o encaminhamento do agente duplicaria cada linha.
+  NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED: "false"

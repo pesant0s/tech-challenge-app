@@ -156,6 +156,10 @@ O agente sobe apenas quando `NEW_RELIC_LICENSE_KEY` está definida — a mesma i
 igual em desenvolvimento sem exigir conta. O `entrypoint.sh` decide entre
 `newrelic-admin run-program uvicorn` e `uvicorn` puro.
 
+Os logs chegam ao New Relic pelo stdout, coletado pelo `nri-bundle` do `tech-challenge-infra-k8s`.
+Por isso o encaminhamento do próprio agente fica desligado no ConfigMap, e cada linha JSON
+gravada dentro de uma requisição leva `trace.id` e `span.id`: do log se abre o trace, e vice-versa.
+
 ---
 
 ## Deploy
