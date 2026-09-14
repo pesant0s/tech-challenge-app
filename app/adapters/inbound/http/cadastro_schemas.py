@@ -42,6 +42,7 @@ class ClienteUpdate(BaseModel):
     nome: str | None = Field(default=None, min_length=2, max_length=150)
     email: EmailStr | None = None
     telefone: str | None = None
+    ativo: bool | None = None
 
     @model_validator(mode="before")
     @classmethod
