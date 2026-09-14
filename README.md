@@ -48,6 +48,7 @@ que este pipeline assume.
 | ADR-001 a 004 · rede e banco | `tech-challenge-infra-db` · README |
 | ADR-005 a 008, 013 e 014 · cluster, CI e observabilidade | `tech-challenge-infra-k8s` · README |
 | ADR-009 a 012 · autenticação | `tech-challenge-auth-lambda` · README |
+| ADR-015 e 016 · padrão de comunicação e notificação | `tech-challenge-app` · README |
 | Swagger | `<url_api>/docs` na AWS · `http://localhost:8000/docs` localmente |
 | Coleção Postman | `tech-challenge-app` · `postman/oficina.postman_collection.json` |
 | Ambientes e deploy ativo | só produção, com a dispensa de homologação registrada no README do `tech-challenge-app`; o ambiente AWS é efêmero (ADR-013), e a URL da API sai em `make output`, no `tech-challenge-infra-k8s`, durante uma sessão |
@@ -140,8 +141,58 @@ Daí em diante o funcionário move a OS pelos status até a entrega; cada mudan�
 e emite o evento `os_status` que alimenta o dashboard.
 
 O aviso ao cliente passa pela porta `EmailNotificacaoPort`, hoje implementada por um adapter que
-registra o e-mail em log. Trocar por um envio real, como uma Lambda com SES, é escrever outro
-adapter, sem mudança no domínio nem nos casos de uso.
+registra o e-mail em log (ADR-016).
+
+---
+
+## Decisões arquiteturais
+
+### ADR-015 · Comunicação síncrona por REST, com o API Gateway como porta única
+
+**Contexto.** Dois serviços atendem requisições, a API no EKS e a Lambda de autenticação, e quatro
+repositórios precisam trocar identificadores de infraestrutura.
+
+**Decisão.**
+- Cliente e funcionário falam com a solução só por HTTP, através do API Gateway: `POST /auth/cpf`
+  vai para a Lambda, e todo o resto segue por VPC Link e NLB para a API.
+- Os serviços não chamam um ao outro. A Lambda emite o JWT e a API o valida com a mesma chave; o que
+  os liga é o contrato do token, com o claim `tipo`, e não uma chamada de rede.
+- Entre repositórios, a troca acontece só no provisionamento, pelo contrato no SSM Parameter Store
+  (ADR-003, no `tech-challenge-infra-db`).
+- Não há mensageria. Eventos de negócio, como `os_status`, saem como log estruturado para a
+  observabilidade, e não como mensagens consumidas por outro serviço.
+
+**Motivo.** Todo fluxo do desafio é uma requisição que espera resposta: autenticar, abrir a OS,
+aprovar o orçamento, mudar o status. Uma fila acrescentaria entrega assíncrona, reprocessamento e mais
+um serviço para operar, sem nenhum consumidor que dependa disso.
+
+**Consequências.**
+- Latência e erro ficam visíveis de ponta a ponta: o `requestId` do gateway vira o `correlation_id`
+  da API.
+- Uma falha do banco aparece na hora para quem chamou, como 503 na Lambda ou 5xx na API, sem
+  mensagens acumulando.
+- Quando surgir um consumidor assíncrono, como a notificação real (ADR-016), o evento já existe e
+  passa a ser publicado num tópico.
+
+---
+
+### ADR-016 · Notificação por porta, com envio simulado nesta fase
+
+**Contexto.** O cliente precisa saber que há um orçamento aguardando aprovação. O desafio sugere
+soluções serverless para notificações, mas nenhum requisito define canal, provedor ou conteúdo.
+
+**Decisão.** A abertura da OS chama a porta `EmailNotificacaoPort`. O adapter atual,
+`EmailSimuladoAdapter`, registra o e-mail em log estruturado (`oficina.notificacoes`). A resposta do
+cliente volta pelas rotas autenticadas por CPF ou pelo webhook `POST /webhooks/email`.
+
+**Motivo.** Um provedor real exige identidade de envio verificada, já que o SES em sandbox só envia
+para endereços verificados, ou confirmação manual de assinatura, no caso de e-mail pelo SNS. Os dois
+quebrariam a reprodução do ambiente em outra conta sem passos manuais.
+
+**Caminho serverless.** Um adapter que publica o evento num tópico SNS, assinado por uma Lambda que
+envia pelo SES. Domínio e casos de uso não mudam; só a composição na rota de abertura da OS.
+
+**Consequência.** Nesta entrega, a notificação é demonstrada pelo log, e não por uma caixa de entrada.
 
 ---
 
@@ -255,7 +306,7 @@ pipeline em que estado ele está — ver ADR-013 naquele repositório. **Job pul
 é o comportamento esperado com o ambiente desligado. Já uma falha de autenticação com a
 variável em `true` fica vermelha e explica no log as causas prováveis.
 
-A `main` é protegida: sem push direto, apenas Pull Request aprovado.
+A `main` é protegida: sem push direto; código só entra por Pull Request, com os checks do CI obrigatórios.
 
 **Ambiente único.** O enunciado pede deploy automático de homologação e produção; na live de
 apresentação da fase, a orientação foi que apenas produção é suficiente. Um segundo ambiente
@@ -312,7 +363,8 @@ No Swagger, cada público tem seu esquema no **Authorize**.
 | Método | Rota | Acesso |
 |---|---|---|
 | POST | `/auth/token` | pública (10 req/min por IP) |
-| POST · GET · DELETE | `/auth/usuarios` | ADMIN |
+| POST · GET | `/auth/usuarios` | ADMIN |
+| DELETE | `/auth/usuarios/{id}` | ADMIN |
 
 ### Ordens de Serviço
 | Método | Rota | Acesso |
