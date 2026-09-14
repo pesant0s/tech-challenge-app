@@ -77,3 +77,12 @@ def test_webhook_cpf_errado(client, auth_headers):
         "token": VALID_TOKEN,
     })
     assert r.status_code == 422
+
+
+def test_webhook_token_com_caractere_nao_ascii(client, auth_headers):
+    os = _setup(client, auth_headers)
+    r = client.post("/webhooks/email", json={
+        "os_id": os["id"], "acao": "APROVAR",
+        "cpf_cnpj": CPF_WH, "token": "tokén-errado",
+    })
+    assert r.status_code == 403

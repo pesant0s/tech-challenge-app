@@ -23,7 +23,8 @@ em tempo constante (`hmac.compare_digest`) para evitar timing attacks.
 Não requer JWT — destinado a ser chamado pelo serviço de e-mail.
 """)
 def webhook_email(payload: WebhookEmailPayload, db: Session = Depends(get_db)):
-    if not hmac.compare_digest(payload.token, settings.WEBHOOK_SECRET):
+    # Em bytes: compare_digest recusa str com caractere fora do ASCII.
+    if not hmac.compare_digest(payload.token.encode(), settings.WEBHOOK_SECRET.encode()):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Token de webhook inválido",
