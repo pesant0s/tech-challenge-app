@@ -51,8 +51,7 @@ que este pipeline assume.
 | ADR-015 e 016 · padrão de comunicação e notificação | `tech-challenge-app` · README |
 | Swagger | `<url_api>/docs` na AWS · `http://localhost:8000/docs` localmente |
 | Coleção Postman | `tech-challenge-app` · `postman/oficina.postman_collection.json` |
-| Ambientes e deploy ativo | só produção, com a dispensa de homologação registrada no README do `tech-challenge-app`; o ambiente AWS é efêmero (ADR-013), e a URL da API sai em `make output`, no `tech-challenge-infra-k8s`, durante uma sessão |
-
+| Ambientes e deploy ativo | Só produção, justificado no `tech-challenge-app` · README, seção *Deploy*. O ambiente AWS é efêmero (ADR-013): a URL da API sai em `make output`, no `tech-challenge-infra-k8s`, enquanto a sessão dura |
 
 ---
 
@@ -379,9 +378,25 @@ No Swagger, cada público tem seu esquema no **Authorize**.
 | POST | `/atendimento/os/{id}/aprovar` · `/rejeitar` | cliente titular da OS |
 
 ### Cadastro, Catálogo e Estoque
-CRUD completo de clientes, veículos, serviços e peças. Escrita em catálogo e estoque exige ADMIN.
-Para desativar um cliente, `PATCH /cadastro/clientes/{id}` com `{"ativo": false}`: a Lambda passa a
-responder 403 para o CPF dele, e os tokens já emitidos, 401.
+| Método | Rota | Acesso |
+|---|---|---|
+| POST · GET | `/cadastro/clientes` | autenticado |
+| GET | `/cadastro/clientes/buscar?cpf_cnpj=` | autenticado |
+| GET | `/cadastro/clientes/{id}` | ADMIN |
+| PATCH | `/cadastro/clientes/{id}` | autenticado |
+| POST | `/cadastro/veiculos` | autenticado |
+| GET | `/cadastro/clientes/{id}/veiculos` | autenticado |
+| GET · PUT · DELETE | `/cadastro/veiculos/{id}` | autenticado |
+| GET | `/catalogo/servicos` · `/catalogo/servicos/{id}` | autenticado |
+| POST | `/catalogo/servicos` | ADMIN |
+| PUT · DELETE | `/catalogo/servicos/{id}` | ADMIN |
+| GET | `/estoque/pecas` · `/estoque/pecas/{id}` | autenticado |
+| POST | `/estoque/pecas` | ADMIN |
+| PUT · DELETE | `/estoque/pecas/{id}` | ADMIN |
+| POST | `/estoque/pecas/{id}/entrada` | ADMIN |
+
+Desativar um cliente é `PATCH /cadastro/clientes/{id}` com `{"ativo": false}`: a Lambda passa a
+responder 403 ao CPF dele, e os tokens já emitidos, 401.
 
 ### Webhook
 | Método | Rota | Acesso |
