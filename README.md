@@ -380,6 +380,8 @@ No Swagger, cada público tem seu esquema no **Authorize**.
 
 ### Cadastro, Catálogo e Estoque
 CRUD completo de clientes, veículos, serviços e peças. Escrita em catálogo e estoque exige ADMIN.
+Para desativar um cliente, `PATCH /cadastro/clientes/{id}` com `{"ativo": false}`: a Lambda passa a
+responder 403 para o CPF dele, e os tokens já emitidos, 401.
 
 ### Webhook
 | Método | Rota | Acesso |
