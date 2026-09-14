@@ -1,11 +1,13 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import registry, sessionmaker
+from sqlalchemy.pool import QueuePool
 from app.infrastructure.config import settings
 
 mapper_registry = registry()
 metadata = mapper_registry.metadata
 
-engine = create_engine(settings.DATABASE_URL)
+# Até 5 conexões por processo: no teto do HPA (6 pods × 2 workers) são 60, dentro do limite do db.t4g.micro.
+engine = create_engine(settings.DATABASE_URL, poolclass=QueuePool, pool_size=3, max_overflow=2, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
