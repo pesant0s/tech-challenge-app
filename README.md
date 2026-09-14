@@ -245,7 +245,7 @@ de qualquer erro — então um problema relatado pelo usuário é rastreável di
 ### Eventos de negócio
 
 Cada mudança de status da OS gera um log com `evento=os_status` e o tempo que ela passou no
-status anterior; a abertura aparece com `status_anterior` nulo. São a base dos dashboards de
+status anterior; a abertura vem sem `status_anterior`. São a base dos dashboards de
 volume diário e de tempo médio por status.
 
 ```json
@@ -362,7 +362,7 @@ No Swagger, cada público tem seu esquema no **Authorize**.
 ### Autenticação
 | Método | Rota | Acesso |
 |---|---|---|
-| POST | `/auth/token` | pública (10 req/min por IP) |
+| POST | `/auth/token` | pública, com rate limit de 10 req/min por IP em cada processo da API |
 | POST · GET | `/auth/usuarios` | ADMIN |
 | DELETE | `/auth/usuarios/{id}` | ADMIN |
 
