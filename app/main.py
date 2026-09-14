@@ -55,7 +55,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-limiter = Limiter(key_func=get_remote_address)
+# Atrás do API Gateway a origem vista é a VPC; o gateway repassa o IP do cliente em x-cliente-ip.
+limiter = Limiter(key_func=lambda request: request.headers.get("x-cliente-ip") or get_remote_address(request))
 
 app = FastAPI(
     title="Tech Challenge — Oficina Mecânica",
@@ -136,7 +137,7 @@ async def business_rule_handler(request: Request, exc: BusinessRuleException):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=False,  # o token vai no cabeçalho, não em cookie
     allow_methods=["*"],
     allow_headers=["*"],
 )
