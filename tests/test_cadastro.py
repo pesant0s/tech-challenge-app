@@ -244,3 +244,14 @@ def test_deletar_veiculo(client, auth_headers):
 def test_rota_sem_auth(client):
     r = client.get("/cadastro/clientes")
     assert r.status_code == 401
+
+
+def test_desativar_cliente_corta_o_acesso_pelo_token(client, auth_headers, token_cliente):
+    c = client.post("/cadastro/clientes", json={
+        "nome": "Cliente Ativo", "cpf_cnpj": CPF_1, "telefone": "11999999999"
+    }, headers=auth_headers).json()
+    assert client.get("/atendimento/os/consulta", headers=token_cliente(c)).status_code == 200
+    r = client.patch(f"/cadastro/clientes/{c['id']}", json={"ativo": False}, headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["ativo"] is False
+    assert client.get("/atendimento/os/consulta", headers=token_cliente(c)).status_code == 401

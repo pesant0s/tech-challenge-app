@@ -57,7 +57,7 @@ def obter_cliente(cliente_id: UUID, db: Session = Depends(get_db), _=Depends(req
 
 @router.patch("/clientes/{cliente_id}", response_model=ClienteResponse,
     summary="Atualizar cliente (parcial)",
-    description="Atualiza nome, e-mail e/ou telefone. **CPF/CNPJ é imutável** — incluí-lo no body retorna 422.")
+    description="Atualiza nome, e-mail, telefone e/ou `ativo`. Com `ativo: false`, o cliente deixa de autenticar pelo CPF. **CPF/CNPJ é imutável** — incluí-lo no body retorna 422.")
 def atualizar_cliente(cliente_id: UUID, data: ClienteUpdate, db: Session = Depends(get_db), _=Depends(get_current_user)):
     return _clientes_uc(db).atualizar(cliente_id, data.model_dump(exclude_unset=True))
 
