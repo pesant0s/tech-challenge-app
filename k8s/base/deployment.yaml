@@ -16,6 +16,7 @@ spec:
         app.kubernetes.io/name: oficina-api
         app.kubernetes.io/part-of: tech-challenge
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: api
           image: oficina-api

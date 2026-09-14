@@ -3,7 +3,7 @@ import uuid
 from datetime import timezone
 from sqlalchemy import (
     Table, Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey,
-    Enum, UniqueConstraint, TypeDecorator,
+    Enum, UniqueConstraint, CheckConstraint, TypeDecorator,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -66,6 +66,8 @@ servicos = Table(
     Column("preco", Numeric(10, 2), nullable=False),
     Column("tempo_estimado_minutos", Integer, nullable=True),
     UniqueConstraint("nome", name="uq_servicos_nome"),
+    CheckConstraint("preco > 0", name="ck_servicos_preco_positivo"),
+    CheckConstraint("tempo_estimado_minutos IS NULL OR tempo_estimado_minutos > 0", name="ck_servicos_tempo_positivo"),
 )
 
 pecas = Table(
@@ -77,6 +79,9 @@ pecas = Table(
     Column("quantidade", Integer, nullable=False, default=0),
     Column("estoque_minimo", Integer, nullable=False, default=1),
     UniqueConstraint("nome", name="uq_pecas_nome"),
+    CheckConstraint("preco > 0", name="ck_pecas_preco_positivo"),
+    CheckConstraint("quantidade >= 0", name="ck_pecas_quantidade_nao_negativa"),
+    CheckConstraint("estoque_minimo >= 0", name="ck_pecas_estoque_minimo_nao_negativo"),
 )
 
 movimentacoes_estoque = Table(
@@ -86,6 +91,8 @@ movimentacoes_estoque = Table(
     Column("tipo", String(10), nullable=False),
     Column("quantidade", Integer, nullable=False),
     Column("motivo", String(200), nullable=True),
+    CheckConstraint("quantidade > 0", name="ck_movimentacoes_quantidade_positiva"),
+    CheckConstraint("tipo IN ('ENTRADA', 'SAIDA')", name="ck_movimentacoes_tipo"),
 )
 
 ordens_servico = Table(
@@ -98,6 +105,7 @@ ordens_servico = Table(
     Column("criado_em", DataHoraUTC(timezone=True), server_default=func.now()),
     Column("iniciado_em", DataHoraUTC(timezone=True), nullable=True),
     Column("finalizado_em", DataHoraUTC(timezone=True), nullable=True),
+    CheckConstraint("valor_total IS NULL OR valor_total >= 0", name="ck_ordens_servico_valor_nao_negativo"),
 )
 
 itens_os = Table(
@@ -108,6 +116,9 @@ itens_os = Table(
     Column("peca_id", UUID(as_uuid=True), ForeignKey("pecas.id"), nullable=True),
     Column("quantidade", Integer, nullable=False, default=1),
     Column("preco_unitario", Numeric(10, 2), nullable=False),
+    CheckConstraint("quantidade > 0", name="ck_itens_os_quantidade_positiva"),
+    CheckConstraint("preco_unitario >= 0", name="ck_itens_os_preco_nao_negativo"),
+    CheckConstraint("(servico_id IS NULL) <> (peca_id IS NULL)", name="ck_itens_os_servico_ou_peca"),
 )
 
 historico_status_os = Table(

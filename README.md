@@ -34,6 +34,27 @@ que este pipeline assume.
 
 ---
 
+## Documentação
+
+| Documento | Onde está |
+|---|---|
+| Diagrama de componentes | `tech-challenge-infra-k8s` · README, seção *Arquitetura* |
+| Sequência da autenticação por CPF | `tech-challenge-infra-k8s` · README, *Fluxo de uma requisição autenticada* |
+| Sequência da abertura de ordem de serviço | `tech-challenge-app` · README, *Abertura de uma ordem de serviço* |
+| Modelo de dados: ER, relacionamentos e ajustes | `tech-challenge-app` · `docs/modelo-de-dados.md` |
+| RFC-001 · Escolha da nuvem | `tech-challenge-infra-k8s` · `docs/rfc/RFC-001-nuvem.md` |
+| RFC-002 · Escolha do banco de dados | `tech-challenge-infra-db` · `docs/rfc/RFC-002-banco-de-dados.md` |
+| RFC-003 · Estratégia de autenticação | `tech-challenge-auth-lambda` · `docs/rfc/RFC-003-autenticacao.md` |
+| ADR-001 a 004 · rede e banco | `tech-challenge-infra-db` · README |
+| ADR-005 a 008, 013 e 014 · cluster, CI e observabilidade | `tech-challenge-infra-k8s` · README |
+| ADR-009 a 012 · autenticação | `tech-challenge-auth-lambda` · README |
+| Swagger | `<url_api>/docs` na AWS · `http://localhost:8000/docs` localmente |
+| Coleção Postman | `tech-challenge-app` · `postman/oficina.postman_collection.json` |
+| Ambientes e deploy ativo | só produção, com a dispensa de homologação registrada no README do `tech-challenge-app`; o ambiente AWS é efêmero (ADR-013), e a URL da API sai em `make output`, no `tech-challenge-infra-k8s`, durante uma sessão |
+
+
+---
+
 ## Arquitetura
 
 Hexagonal (Ports & Adapters), com o domínio livre de framework — `import app.domain.entities.os`
@@ -78,7 +99,49 @@ AGUARDANDO_APROVACAO ──► RECEBIDA ──► EM_DIAGNOSTICO ──► EM_EX
 
 Transições fora deste mapa são recusadas pelo próprio agregado, com `BusinessRuleException`.
 Cada entrada em um status fica registrada em `historico_status_os`; daí saem o histórico
-devolvido em `GET /atendimento/os/{id}` e o tempo médio por status das métricas.
+devolvido em `GET /atendimento/os/{id}` e o tempo médio por status das métricas. O modelo
+completo, com diagrama ER, está em [docs/modelo-de-dados.md](docs/modelo-de-dados.md).
+
+### Abertura de uma ordem de serviço
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor F as Funcionário
+    participant G as API Gateway
+    participant A as API no EKS
+    participant D as RDS PostgreSQL
+    actor C as Cliente
+    participant L as Lambda de auth
+
+    F->>G: POST /auth/token com usuário e senha
+    G->>A: repassa, com x-request-id
+    A->>D: usuário ativo e senha confere?
+    A-->>F: JWT com tipo = usuario
+    F->>G: POST /atendimento/os + Bearer
+    G->>A: repassa
+    A->>D: serviços e peças existem? há estoque?
+    A->>A: monta o agregado e calcula o orçamento
+    A->>D: grava OS, itens e histórico numa transação
+    A--)C: aviso de orçamento pendente, por e-mail simulado
+    A-->>F: 201 · AGUARDANDO_APROVACAO
+    C->>G: POST /auth/cpf com o CPF
+    G->>L: invoca
+    L->>D: cliente existe e está ativo?
+    L-->>C: JWT com tipo = cliente
+    C->>G: POST /atendimento/os/{id}/aprovar + Bearer
+    G->>A: repassa
+    A->>D: SELECT ... FOR UPDATE e confere o titular
+    A->>D: status RECEBIDA + histórico
+    A-->>C: 200 · RECEBIDA
+```
+
+Daí em diante o funcionário move a OS pelos status até a entrega; cada mudança grava o histórico
+e emite o evento `os_status` que alimenta o dashboard.
+
+O aviso ao cliente passa pela porta `EmailNotificacaoPort`, hoje implementada por um adapter que
+registra o e-mail em log. Trocar por um envio real, como uma Lambda com SES, é escrever outro
+adapter, sem mudança no domínio nem nos casos de uso.
 
 ---
 
@@ -271,7 +334,8 @@ CRUD completo de clientes, veículos, serviços e peças. Escrita em catálogo e
 |---|---|---|
 | POST | `/webhooks/email` | token compartilhado, comparado com `hmac.compare_digest` |
 
-Detalhes, schemas e exemplos no Swagger.
+Detalhes, schemas e exemplos no Swagger. A jornada completa, do cadastro à entrega, está na coleção
+[postman/oficina.postman_collection.json](postman/oficina.postman_collection.json).
 
 ---
 
