@@ -14,6 +14,13 @@ class EstoqueRepositoryAdapter:
     def buscar_peca(self, peca_id) -> Peca | None:
         return self._db.query(Peca).filter(Peca.id == peca_id).first()
 
+    def buscar_peca_para_escrita(self, peca_id) -> Peca:
+        """Busca com SELECT FOR UPDATE — usar antes de alterar a quantidade."""
+        p = self._db.query(Peca).filter(Peca.id == peca_id).with_for_update().first()
+        if not p:
+            raise NotFoundException("Peça não encontrada")
+        return p
+
     def baixar_estoque(self, peca_id, quantidade: int, motivo: str = "Baixa por OS") -> None:
         # FOR UPDATE: duas OS não consomem a mesma peça entre a checagem e o commit.
         p = self._db.query(Peca).filter(Peca.id == peca_id).with_for_update().first()

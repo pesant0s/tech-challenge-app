@@ -44,7 +44,8 @@ class GerenciarEstoqueUseCase:
         self._repo.commit()
 
     def registrar_entrada(self, peca_id, quantidade: int, motivo: str | None) -> Peca:
-        peca = self.obter(peca_id)
+        # Com trava: duas entradas simultâneas somariam sobre a mesma leitura e uma se perderia.
+        peca = self._repo.buscar_peca_para_escrita(peca_id)
         peca.quantidade += quantidade
         self._repo.registrar_movimentacao(peca_id, "ENTRADA", quantidade, motivo)
         self._repo.commit()
