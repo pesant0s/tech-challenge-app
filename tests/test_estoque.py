@@ -165,3 +165,34 @@ def test_estoque_insuficiente_ao_executar_os(client, auth_headers):
         "pecas": [{"peca_id": peca["id"], "quantidade": 5}]
     }, headers=auth_headers)
     assert os.status_code == 422
+
+
+def test_entrada_de_estoque_trava_a_linha():
+    """Sem SELECT FOR UPDATE, duas entradas simultâneas perderiam uma das somas."""
+    from decimal import Decimal
+    from uuid import uuid4
+    from app.application.use_cases.gerenciar_estoque import GerenciarEstoqueUseCase
+    from app.domain.entities.estoque import Peca
+
+    class RepoQueRegistraATrava:
+        def __init__(self):
+            self.travou = False
+            self.peca = Peca(nome="Correia", preco=Decimal("10"), quantidade=5, estoque_minimo=1)
+
+        def buscar_peca_para_escrita(self, peca_id):
+            self.travou = True
+            return self.peca
+
+        def registrar_movimentacao(self, *args):
+            pass
+
+        def commit(self):
+            pass
+
+        def refresh(self, peca):
+            pass
+
+    repo = RepoQueRegistraATrava()
+    peca = GerenciarEstoqueUseCase(repo).registrar_entrada(uuid4(), 10, "Compra NF 1")
+    assert repo.travou, "a entrada precisa travar a linha antes de somar"
+    assert peca.quantidade == 15
