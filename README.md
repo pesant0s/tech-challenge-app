@@ -306,7 +306,7 @@ pipeline em que estado ele está — ver ADR-013 naquele repositório. **Job pul
 é o comportamento esperado com o ambiente desligado. Já uma falha de autenticação com a
 variável em `true` fica vermelha e explica no log as causas prováveis.
 
-A `main` é protegida: sem push direto, apenas Pull Request aprovado.
+A `main` é protegida: sem push direto; código só entra por Pull Request, com os checks do CI obrigatórios.
 
 **Ambiente único.** O enunciado pede deploy automático de homologação e produção; na live de
 apresentação da fase, a orientação foi que apenas produção é suficiente. Um segundo ambiente
@@ -363,7 +363,8 @@ No Swagger, cada público tem seu esquema no **Authorize**.
 | Método | Rota | Acesso |
 |---|---|---|
 | POST | `/auth/token` | pública (10 req/min por IP) |
-| POST · GET · DELETE | `/auth/usuarios` | ADMIN |
+| POST · GET | `/auth/usuarios` | ADMIN |
+| DELETE | `/auth/usuarios/{id}` | ADMIN |
 
 ### Ordens de Serviço
 | Método | Rota | Acesso |
