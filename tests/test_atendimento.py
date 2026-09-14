@@ -1,3 +1,5 @@
+import logging
+
 CPF_AT_1 = "529.982.247-25"
 CPF_AT_2 = "123.456.789-09"
 CPF_AT_3 = "000.000.001-91"
@@ -224,6 +226,9 @@ def test_fluxo_completo(client, auth_headers):
             json={"status": status}, headers=auth_headers)
         assert r.status_code == 200
     assert r.json()["status"] == "ENTREGUE"
+    assert [h["status"] for h in r.json()["historico"]] == [
+        "AGUARDANDO_APROVACAO", "RECEBIDA", "EM_DIAGNOSTICO", "EM_EXECUCAO", "FINALIZADA", "ENTREGUE",
+    ]
 
 
 def test_metricas_sem_os_finalizada(client, auth_headers):
@@ -231,6 +236,7 @@ def test_metricas_sem_os_finalizada(client, auth_headers):
     assert r.status_code == 200
     assert r.json()["total_os_finalizadas"] == 0
     assert r.json()["tempo_medio_minutos"] == 0
+    assert r.json()["por_status"] == {}
 
 
 def test_metricas_tempo_medio(client, auth_headers):
@@ -247,6 +253,23 @@ def test_metricas_tempo_medio(client, auth_headers):
     assert r.status_code == 200
     assert r.json()["total_os_finalizadas"] == 1
     assert r.json()["tempo_medio_minutos"] >= 0
+    assert set(r.json()["por_status"]) == {"AGUARDANDO_APROVACAO", "RECEBIDA", "EM_DIAGNOSTICO", "EM_EXECUCAO"}
+
+
+def test_mudanca_de_status_gera_evento_para_os_dashboards(client, auth_headers, caplog):
+    c, v, s = _setup(client, auth_headers)
+    with caplog.at_level(logging.INFO, logger="oficina.os"):
+        os = client.post("/atendimento/os", json={
+            "cliente_id": c["id"], "veiculo_id": v["id"],
+            "servicos": [{"servico_id": s["id"], "quantidade": 1}]
+        }, headers=auth_headers).json()
+        client.patch(f"/atendimento/os/{os['id']}/status", json={"status": "RECEBIDA"}, headers=auth_headers)
+    eventos = [e for e in caplog.records if getattr(e, "evento", None) == "os_status"]
+    assert [(e.status_anterior, e.status_novo) for e in eventos] == [
+        (None, "AGUARDANDO_APROVACAO"), ("AGUARDANDO_APROVACAO", "RECEBIDA"),
+    ]
+    assert eventos[0].segundos_no_status_anterior is None
+    assert eventos[1].segundos_no_status_anterior >= 0
 
 
 def test_os_requer_auth(client):

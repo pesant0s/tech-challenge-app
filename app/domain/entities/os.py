@@ -32,6 +32,16 @@ class ItemOS:
         return Decimal(str(self.preco_unitario)) * self.quantidade
 
 
+class HistoricoStatusOS:
+    """Entrada da OS em um status; a diferença entre entradas dá o tempo em cada status."""
+
+    def __init__(self, status=None, entrou_em=None, os_id=None, id=None):
+        self.id = id
+        self.os_id = os_id
+        self.status = status
+        self.entrou_em = entrou_em
+
+
 class OrdemDeServico:
     """Ordem de Serviço com máquina de estados de negócio. Entidade de domínio pura."""
 
@@ -48,7 +58,7 @@ class OrdemDeServico:
 
     def __init__(self, cliente_id=None, veiculo_id=None, status=StatusOS.AGUARDANDO_APROVACAO,
                  valor_total=None, criado_em=None, iniciado_em=None, finalizado_em=None,
-                 itens=None, id=None):
+                 itens=None, historico=None, id=None):
         self.id = id
         self.cliente_id = cliente_id
         self.veiculo_id = veiculo_id
@@ -57,8 +67,9 @@ class OrdemDeServico:
         self.criado_em = criado_em
         self.iniciado_em = iniciado_em
         self.finalizado_em = finalizado_em
-        # Ao carregar do banco o ORM não chama __init__, então a coleção não é sobrescrita.
+        # Ao carregar do banco o ORM não chama __init__, então as coleções não são sobrescritas.
         self.itens = itens if itens is not None else []
+        self.historico = historico if historico is not None else [HistoricoStatusOS(status, datetime.now(timezone.utc))]
 
     def transicionar_para(self, novo_status: StatusOS) -> None:
         permitidos = self.TRANSICOES_VALIDAS.get(self.status, [])
@@ -67,11 +78,13 @@ class OrdemDeServico:
                 f"Transição inválida: {self.status} → {novo_status}. "
                 f"Permitidos: {[s.value for s in permitidos]}"
             )
+        agora = datetime.now(timezone.utc)
         self.status = novo_status
+        self.historico.append(HistoricoStatusOS(novo_status, agora))
         if novo_status == StatusOS.EM_EXECUCAO:
-            self.iniciado_em = datetime.now(timezone.utc)
+            self.iniciado_em = agora
         if novo_status == StatusOS.FINALIZADA:
-            self.finalizado_em = datetime.now(timezone.utc)
+            self.finalizado_em = agora
 
     def aprovar(self) -> None:
         if self.status != StatusOS.AGUARDANDO_APROVACAO:

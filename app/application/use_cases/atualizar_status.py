@@ -1,3 +1,4 @@
+from app.application.eventos_os import registrar_mudanca_de_status
 from app.domain.entities.os import OrdemDeServico, StatusOS
 from app.domain.ports.os_repository import OSRepositoryPort
 
@@ -22,4 +23,5 @@ class AtualizarStatusUseCase:
             self._os_repo.rollback()
             raise
         self._os_repo.refresh(os)
+        registrar_mudanca_de_status(os)
         return os

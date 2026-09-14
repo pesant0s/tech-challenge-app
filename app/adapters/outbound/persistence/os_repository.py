@@ -1,6 +1,7 @@
+from collections import defaultdict
 from sqlalchemy import case
 from sqlalchemy.orm import Session
-from app.domain.entities.os import OrdemDeServico, StatusOS
+from app.domain.entities.os import HistoricoStatusOS, OrdemDeServico, StatusOS
 from app.domain.exceptions import NotFoundException
 
 
@@ -63,14 +64,18 @@ class OSRepositoryAdapter:
         self._db.refresh(entidade)
 
     def tempo_medio_execucao(self) -> dict:
+        historico = self._db.query(HistoricoStatusOS).order_by(HistoricoStatusOS.os_id, HistoricoStatusOS.entrou_em).all()
+        duracoes = defaultdict(list)
+        for atual, proximo in zip(historico, historico[1:]):
+            if atual.os_id == proximo.os_id:
+                duracoes[atual.status.value].append((proximo.entrou_em - atual.entrou_em).total_seconds())
         os_list = self._db.query(OrdemDeServico).filter(
             OrdemDeServico.iniciado_em.isnot(None),
             OrdemDeServico.finalizado_em.isnot(None),
         ).all()
-        if not os_list:
-            return {"tempo_medio_minutos": 0, "total_os_finalizadas": 0}
         total = sum((o.finalizado_em - o.iniciado_em).total_seconds() for o in os_list)
         return {
-            "tempo_medio_minutos": round(total / len(os_list) / 60, 2),
+            "tempo_medio_minutos": round(total / len(os_list) / 60, 2) if os_list else 0,
             "total_os_finalizadas": len(os_list),
+            "por_status": {s: round(sum(d) / len(d) / 60, 2) for s, d in duracoes.items()},
         }

@@ -25,6 +25,13 @@ class ItemOSResponse(BaseModel):
     preco_unitario: Decimal
 
 
+class HistoricoStatusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    status: StatusOS
+    entrou_em: datetime
+
+
 class OSCreate(BaseModel):
     cliente_id: UUID
     veiculo_id: UUID
@@ -50,6 +57,7 @@ class OSResponse(BaseModel):
     iniciado_em: datetime | None
     finalizado_em: datetime | None
     itens: list[ItemOSResponse]
+    historico: list[HistoricoStatusResponse]
 
 
 class OSStatusUpdate(BaseModel):

@@ -9,6 +9,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.infrastructure.config import settings
 from app.infrastructure.logging_config import ConsoleFormatter, JsonFormatter, obter_correlation_id
@@ -46,6 +47,8 @@ async def lifespan(app: FastAPI):
                 password=settings.ADMIN_PASSWORD,
                 role=RoleEnum.ADMIN,
             ))
+    except IntegrityError:
+        db.rollback()  # outro worker ou pod semeou o admin ao mesmo tempo
     finally:
         if get_db not in app.dependency_overrides:
             db.close()

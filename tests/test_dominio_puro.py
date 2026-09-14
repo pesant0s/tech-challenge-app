@@ -11,6 +11,10 @@ def test_os_nova_nasce_com_colecao_de_itens_vazia():
     assert OrdemDeServico().itens == []
 
 
+def test_os_nova_registra_o_status_inicial_no_historico():
+    assert [h.status for h in OrdemDeServico().historico] == [StatusOS.AGUARDANDO_APROVACAO]
+
+
 def test_recalcular_total_sem_banco():
     os_teste = OrdemDeServico(itens=[
         ItemOS(servico_id="s1", quantidade=2, preco_unitario=Decimal("150.00")),
@@ -38,12 +42,18 @@ def test_fluxo_completo_da_os_em_memoria():
     os_teste.transicionar_para(StatusOS.FINALIZADA)
     os_teste.transicionar_para(StatusOS.ENTREGUE)
     assert os_teste.status == StatusOS.ENTREGUE
+    assert [h.status.value for h in os_teste.historico] == [
+        "AGUARDANDO_APROVACAO", "RECEBIDA", "EM_DIAGNOSTICO", "EM_EXECUCAO", "FINALIZADA", "ENTREGUE",
+    ]
+    assert os_teste.historico[-2].entrou_em == os_teste.finalizado_em
     assert os_teste.finalizado_em >= os_teste.iniciado_em
 
 
 def test_transicao_fora_do_mapa_e_recusada():
+    os_teste = OrdemDeServico()
     with pytest.raises(BusinessRuleException, match="Transição inválida"):
-        OrdemDeServico().transicionar_para(StatusOS.FINALIZADA)
+        os_teste.transicionar_para(StatusOS.FINALIZADA)
+    assert len(os_teste.historico) == 1
 
 
 def test_estado_terminal_nao_transiciona():

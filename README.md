@@ -77,6 +77,8 @@ AGUARDANDO_APROVACAO ──► RECEBIDA ──► EM_DIAGNOSTICO ──► EM_EX
 ```
 
 Transições fora deste mapa são recusadas pelo próprio agregado, com `BusinessRuleException`.
+Cada entrada em um status fica registrada em `historico_status_os`; daí saem o histórico
+devolvido em `GET /atendimento/os/{id}` e o tempo médio por status das métricas.
 
 ---
 
@@ -125,6 +127,18 @@ de qualquer erro — então um problema relatado pelo usuário é rastreável di
 ```
 
 `LOG_FORMAT=json` em ambiente remoto, `console` em desenvolvimento.
+
+### Eventos de negócio
+
+Cada mudança de status da OS gera um log com `evento=os_status` e o tempo que ela passou no
+status anterior; a abertura aparece com `status_anterior` nulo. São a base dos dashboards de
+volume diário e de tempo médio por status.
+
+```json
+{"level":"INFO","logger":"oficina.os","message":"OS 3fa8... entrou em EM_EXECUCAO",
+ "evento":"os_status","status_anterior":"EM_DIAGNOSTICO","status_novo":"EM_EXECUCAO",
+ "segundos_no_status_anterior":1843.2,"correlation_id":"9f2c..."}
+```
 
 ### Healthchecks
 
