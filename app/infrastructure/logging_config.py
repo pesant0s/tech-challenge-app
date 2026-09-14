@@ -40,7 +40,8 @@ class JsonFormatter(logging.Formatter):
             evento.update(vinculo)
         if record.exc_info:
             evento["exception"] = self.formatException(record.exc_info)
-        evento.update({k: v for k, v in record.__dict__.items() if k not in _ATRIBUTOS_PADRAO and not k.startswith("_")})
+        # Campos nulos ficam de fora: o New Relic grava null como o texto "null", e o filtro IS NULL deixa de casar.
+        evento.update({k: v for k, v in record.__dict__.items() if k not in _ATRIBUTOS_PADRAO and not k.startswith("_") and v is not None})
         return json.dumps(evento, ensure_ascii=False, default=str)
 
 
