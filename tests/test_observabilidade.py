@@ -44,6 +44,12 @@ def test_log_json_liga_a_linha_ao_trace_do_new_relic(monkeypatch):
     assert {k: evento[k] for k in vinculo} == vinculo
 
 
+def test_log_json_omite_campos_nulos():
+    evento = json.loads(JsonFormatter().format(_registro(status_anterior=None, status_novo="AGUARDANDO_APROVACAO")))
+    assert "status_anterior" not in evento
+    assert evento["status_novo"] == "AGUARDANDO_APROVACAO"
+
+
 def test_log_json_omite_correlation_id_fora_de_requisicao():
     definir_correlation_id("")
     evento = json.loads(JsonFormatter().format(_registro()))
